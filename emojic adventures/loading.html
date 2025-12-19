@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Loading Emojica</title>
+<style>
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #222;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  h1 { font-size: 50px; margin-bottom: 10px; }
+  h2 { font-size: 20px; margin-bottom: 50px; text-align:center; }
+  #loadingBarContainer {
+    position: absolute;
+    bottom: 30px;
+    left: 30px;
+    width: 300px;
+    height: 25px;
+    background: #555;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  #loadingBar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg,#FFD700,#FFA500);
+    border-radius: 12px;
+    transition: width 0.1s;
+  }
+  #kingEmoji {
+    position: absolute;
+    top: 50%;
+    font-size: 50px;
+    transform: translateY(-50%);
+  }
+  #tip {
+    position: absolute;
+    top: 70%;
+    text-align: center;
+    width: 80%;
+    font-size: 18px;
+    color: #FFD700;
+  }
+</style>
+</head>
+<body>
+
+<div id="kingEmoji">👑</div>
+<div id="loadingBarContainer">
+  <div id="loadingBar"></div>
+</div>
+<div id="tip">Tip: Emojica is a vast country with half the population bandits!</div>
+
+<script>
+const tips = [
+  "Emojica is a vast country with half the population bandits!",
+  "Rare animals can bring unexpected loot.",
+  "Rain can be dangerous, plan your travels carefully.",
+  "Mysterious Chests might give swords, armor, or potions.",
+  "Villagers may help you, but some might attack if provoked.",
+  "Explore deserts for camels, forests for rare animals."
+];
+
+const tipElement = document.getElementById('tip');
+tipElement.textContent = tips[Math.floor(Math.random() * tips.length)];
+
+const bar = document.getElementById('loadingBar');
+const king = document.getElementById('kingEmoji');
+let progress = 0;
+const loadInterval = setInterval(() => {
+  progress += 1;
+  bar.style.width = progress + "%";
+  king.style.left = (progress * 3) + "px"; // moves across the screen
+  if(progress >= 100){
+    clearInterval(loadInterval);
+    window.location.href = "index.html";
+  }
+}, 30);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EmoJic AdvenTures</title>
+<style>
+body { margin:0; font-family:sans-serif; background:#87ceeb; }
+#gameContainer { display:flex; }
+#gameCanvas { background:#4CAF50; display:block; }
+#inventory {
+  width:260px;
+  background:#333;
+  color:#fff;
+  padding:10px;
+  font-size:14px;
+  overflow-y:auto;
+  max-height:500px;
+}
+button { padding:5px 10px; margin:4px; font-size:14px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div id="gameContainer">
+<canvas id="gameCanvas" width="800" height="500"></canvas>
+
+<div id="inventory">
+<h3>Inventory</h3>
+<div id="invList"></div>
+<button id="pickupBtn">Pick Up Loot</button>
+
+<h3>Stats</h3>
+<div id="statsMenu"></div>
+</div>
+</div>
+
+<div style="text-align:center; margin-top:10px;">
+<button id="attackBtn">Attack 🗡️</button>
+<button id="sprintBtn">Sprint 🏃</button>
+</div>
+
+<!-- CHARACTER SELECTION MENU -->
+<div id="charMenu" style="
+position:absolute; top:10px; right:10px; background:#222; color:#fff; padding:10px; border-radius:5px;">
+<b>Select Character:</b><br>
+<button onclick="chooseChar('🧔🏿‍♂️')">🧔🏿‍♂️</button>
+<button onclick="chooseChar('🧔🏼‍♂️')">🧔🏼‍♂️</button>
+<button onclick="chooseChar('🧔🏽‍♂️')">🧔🏽‍♂️</button>
+<button onclick="chooseChar('🥷🏽')">🥷🏽</button>
+<button onclick="chooseChar('🧑🏽‍🌾')">🧑🏽‍🌾</button>
+<button onclick="chooseChar('🦸🏽‍♂️')">🦸🏽‍♂️</button>
+<button onclick="chooseChar('🦹🏽‍♂️')">🦹🏽‍♂️</button>
+<button onclick="chooseChar('🧙🏽')">🧙🏽</button>
+<button onclick="chooseChar('🧛🏽')">🧛🏽</button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const tileSize = 40;
+let camX = 0, camY = 0, gameOver = false;
+let facingRight = true;
+
+/* ===== PLAYER ===== */
+const player = { x: 0, y: 0, size: 30, speed: 3, sprinting: false, hp: 140, sword: null, armor: null, charEmoji:null };
+
+/* ===== ITEMS ===== */
+const swords = [
+  {name:'Wood Sword',color:'saddlebrown',dmg:5},
+  {name:'Stone Sword',color:'gray',dmg:8},
+  {name:'Iron Sword',color:'silver',dmg:12},
+  {name:'Steel Sword',color:'#ccc',dmg:18},
+  {name:'Glass Sword',color:'cyan',dmg:25}
+];
+const armors = [
+  {name:'Wood Armor',def:2},{name:'Leather Armor',def:5},{name:'Hide Armor',def:8},{name:'Fur Armor',def:10},
+  {name:'Iron Armor',def:15},{name:'Steel Armor',def:20},{name:'Glass Armor',def:0},{name:'Stone Armor',def:12}
+];
+player.sword = swords[0];
+player.armor = armors[1];
+
+/* ===== INVENTORY ===== */
+let inventory = [];
+function updateInventory() {
+  invList.innerHTML = '';
+  inventory.forEach((i,n) => {
+    invList.innerHTML += `${i.name} <button onclick="equip(${n})">Equip</button> <button onclick="dropItem(${n})">Drop</button><br>`;
+  });
+  stats();
+}
+
+/* ===== REPUTATION ===== */
+let reputation = 'Neutral'; // Neutral start
+function updateReputation() {
+  statsMenu.innerHTML += `<br>Reputation: ${reputation}`;
+}
+
+function equip(n) {
+  let i = inventory[n];
+  if(i.dmg) player.sword = i;
+  if(i.def !== undefined) player.armor = i;
+  stats();
+}
+function dropItem(n) {
+  let item = inventory.splice(n,1)[0];
+  loot.push({...item, x: player.x + 20, y: player.y});
+  updateInventory();
+}
+function stats() {
+  statsMenu.innerHTML = `HP: ${Math.max(0,Math.floor(player.hp))}<br>
+     Sword: ${player.sword.name} (${player.sword.dmg})<br>
+     Armor: ${player.armor.name} (${player.armor.def})`;
+  updateReputation();
+}
+
+/* ===== WORLD ===== */
+const chunks = {}, CHUNK = 20;
+const villagerEmojis = ['🧔🏽‍♂️','🧔🏼‍♂️','🧔🏿‍♂️'], goblinEmojis = ['🧝🏽','🧝🏽‍♂️','🧝🏽‍♀️'], animals = ['🐂','🐄','🐐'];
+
+function getChunk(cx,cy) { const key = `${cx},${cy}`; if(!chunks[key]) generateChunk(cx,cy); return chunks[key]; }
+function getTile(wx,wy) { const cx = Math.floor(wx/CHUNK), cy = Math.floor(wy/CHUNK); return getChunk(cx,cy).tiles[(wy%CHUNK+CHUNK)%CHUNK][(wx%CHUNK+CHUNK)%CHUNK]; }
+
+/* ===== MODIFIED GENERATE CHUNK FOR DESERT BIOME ===== */
+function generateChunk(cx,cy) {
+  let tiles = Array.from({length:CHUNK},()=>Array(CHUNK).fill(0));
+  let desertChance = 0.05;
+  let desert = Math.random() < desertChance;
+
+  if(desert){
+    for(let y=0;y<CHUNK;y++){
+      for(let x=0;x<CHUNK;x++){
+        tiles[y][x] = Math.random() < 0.05 ? '🌵' : 0;
+      }
+    }
+    // rare camels in desert
+    if(Math.random()<0.05){
+      let x = Math.floor(Math.random()*CHUNK);
+      let y = Math.floor(Math.random()*CHUNK);
+      tiles[y][x] = '🐪';
+    }
+  } else {
+    const forest = Math.random()<0.3, treeCount = forest?25:10;
+    if(cy===0){for(let x=0;x<CHUNK;x++){ tiles[9][x]=1; tiles[10][x]=1; }}
+    if(cx%4===0){for(let y=0;y<CHUNK;y++){ tiles[y][9]=1; tiles[y][10]=1; }}
+    for(let i=0;i<treeCount;i++){ 
+      let x=Math.floor(Math.random()*CHUNK), y=Math.floor(Math.random()*CHUNK); 
+      if(tiles[y][x]===0) tiles[y][x]=forest?'🌲':'🌳'; 
+    }
+    // very rare animals in forest/plains
+    if(Math.random()<0.02){ 
+      let x=Math.floor(Math.random()*CHUNK), y=Math.floor(Math.random()*CHUNK); 
+      if(tiles[y][x]===0) tiles[y][x]=animals[Math.floor(Math.random()*animals.length)]; 
+    }
+    if(Math.random()<0.2){
+      let baseX=Math.floor(Math.random()*(CHUNK-2)), baseY=Math.floor(Math.random()*(CHUNK-2)), huts=3+Math.floor(Math.random()*2);
+      for(let i=0;i<huts;i++){
+        let hx=baseX+(i%2), hy=baseY+Math.floor(i/2);
+        if(tiles[hy][hx]===0){ tiles[hy][hx]='🛖';
+          let villagerCount=1+Math.floor(Math.random()*2);
+          for(let v=0;v<villagerCount;v++){
+            villagers.push({x: cx*CHUNK*tileSize + hx*tileSize + Math.random()*tileSize, y: cy*CHUNK*tileSize + hy*tileSize + Math.random()*tileSize, hp:10, attacked:false, emoji:villagerEmojis[Math.floor(Math.random()*villagerEmojis.length)], homeX: cx*CHUNK*tileSize + hx*tileSize + tileSize/2, homeY: cy*CHUNK*tileSize + hy*tileSize + tileSize/2});
+          }
+          if(Math.random()<0.3){ loot.push({name: animals[Math.floor(Math.random()*animals.length)], x: cx*CHUNK*tileSize + hx*tileSize, y: cy*CHUNK*tileSize + hy*tileSize, color:'brown'}); }
+        }
+      }
+    }
+  }
+  chunks[`${cx},${cy}`] = {tiles, camps:0, castle:false, forest:!desert, desert};
+}
+/* ===== ENTITIES & SPAWNS ===== */
+let goblins=[], fires=[], loot=[], castles=[], villagers=[], thieves=[];
+function spawnGoblinCamp(cx,cy){ const chunk=getChunk(cx,cy); if(chunk.camps>=2) return;
+  let x=cx*CHUNK*tileSize+tileSize*10, y=cy*CHUNK*tileSize+tileSize*10; if(getTile(Math.floor(x/tileSize),Math.floor(y/tileSize))!==0) return;
+  chunk.camps++; fires.push({x,y});
+  for(let i=0;i<3;i++) goblins.push({x:x+Math.random()*80-40, y:y+Math.random()*80-40, size:30, hp:40, maxHp:40, alive:true, emoji:goblinEmojis[Math.floor(Math.random()*goblinEmojis.length)], lastHit:0});
+}
+function spawnCastle(cx,cy){ const chunk=getChunk(cx,cy); if(chunk.castle) return;
+  chunk.castle=true; let x=cx*CHUNK*tileSize+tileSize*6, y=cy*CHUNK*tileSize+tileSize*6; castles.push({x,y});
+  let count=5+Math.floor(Math.random()*4);
+  for(let i=0;i<count;i++) goblins.push({x:x+Math.random()*120, y:y+Math.random()*120, size:30, hp:60, maxHp:60, alive:true, emoji:goblinEmojis[Math.floor(Math.random()*goblinEmojis.length)], lastHit:0});
+}
+function spawnThief(cx,cy){ let x=cx*CHUNK*tileSize+Math.random()*CHUNK*tileSize, y=cy*CHUNK*tileSize+Math.random()*CHUNK*tileSize;
+  if(getTile(Math.floor(x/tileSize),Math.floor(y/tileSize))===0) thieves.push({x,y,size:30,hp:40,maxHp:40,attacking:false,emoji:'🥷🏽',dialogueShown:false,lastHit:0});
+}
+
+/* ===== STARTER ENEMY ===== */
+goblins.push({x:player.x+100, y:player.y, size:30, hp:20, maxHp:20, alive:true, emoji:goblinEmojis[Math.floor(Math.random()*goblinEmojis.length)], lastHit:0});
+
+/* ===== CONTROLS ===== */
+let keys={}, attack=false;
+onkeydown=e=>keys[e.key]=true; onkeyup=e=>keys[e.key]=false;
+attackBtn.onclick=()=>attack=true;
+sprintBtn.onmousedown=()=>player.sprinting=true;
+sprintBtn.onmouseup=()=>player.sprinting=false;
+pickupBtn.onclick=pickup;
+
+/* ===== PICKUP ===== */
+function pickup(){ loot=loot.filter(l=>{ if(Math.abs(player.x-l.x)<40 && Math.abs(player.y-l.y)<40){ inventory.push(l); updateInventory(); return false; } return true; }); }
+
+/* ===== POTIONS DROP ===== */
+function dropPotion(x,y){ loot.push({name:'Potion of Lesser Health', heal:20, x, y, color:'pink'}); }
+
+/* ===== BIOME MESSAGE ===== */
+let lastBiome = null;
+function checkBiome(){
+  const cx = Math.floor(player.x/(CHUNK*tileSize)), cy = Math.floor(player.y/(CHUNK*tileSize));
+  const chunk = getChunk(cx,cy);
+  let biome = chunk.desert ? 'Desert' : 'Plains';
+  if(biome !== lastBiome){ lastBiome = biome; showBiomeMessage(`Entering ${biome}`); }
+}
+function showBiomeMessage(msg){
+  const div = document.createElement('div'); div.textContent = msg;
+  div.style.position='absolute'; div.style.top='50px'; div.style.left='50%'; div.style.transform='translateX(-50%)';
+  div.style.background='rgba(0,0,0,0.7)'; div.style.color='white'; div.style.padding='10px 20px'; div.style.borderRadius='8px';
+  document.body.appendChild(div); setTimeout(()=>{ div.remove(); },3000);
+}
+
+/* ===== CHARACTER SELECTION ===== */
+function chooseChar(e){ player.charEmoji=e; }
+
+/* ===== UPDATE ===== */
+function update(){
+  if(gameOver) return;
+  let s=player.sprinting?player.speed*2:player.speed;
+  if(keys.ArrowUp){ player.y-=s; facingRight = true; }
+  if(keys.ArrowDown){ player.y+=s; facingRight = true; }
+  if(keys.ArrowLeft){ player.x-=s; facingRight = false; }
+  if(keys.ArrowRight){ player.x+=s; facingRight = true; }
+
+  camX=player.x-canvas.width/2; camY=player.y-canvas.height/2;
+  let cx=Math.floor(player.x/(CHUNK*tileSize)), cy=Math.floor(player.y/(CHUNK*tileSize));
+  if(Math.random()<0.001) spawnGoblinCamp(cx,cy);
+  if(Math.random()<0.00005) spawnCastle(cx,cy);
+  if(Math.random()<0.0005) spawnThief(cx,cy);
+
+  const now=Date.now();
+
+  goblins.forEach(g=>{ if(!g.alive) return;
+    let dx=player.x-g.x, dy=player.y-g.y, d=Math.hypot(dx,dy);
+    if(d<150 && d>0){ g.x+=dx/d*1.5; g.y+=dy/d*1.5; }
+    if(d<40 && now-g.lastHit>2000){ player.hp-=5; g.lastHit=now; }
+  });
+
+  thieves.forEach(t=>{
+    let dx=player.x-t.x, dy=player.y-t.y, dist=Math.hypot(dx,dy);
+    if(!t.dialogueShown && dist<120){ t.dialogueShown=true; setTimeout(()=>{
+      let choice=confirm("🥷🏽 Thief says: 'Hand over the money or you're gone!' Press OK for YES, Cancel for NO.");
+      if(choice){ thieves=thieves.filter(th2=>th2!==t); reputation = reputation === 'Neutral' ? 'Good' : reputation; dropPotion(t.x,t.y); } 
+      else { t.attacking=true; }
+    },100);}
+    if(t.attacking && dist>0){ t.x+=dx/dist*1.5; t.y+=dy/dist*1.5; if(dist<40 && now-t.lastHit>3000){ player.hp-=13; t.lastHit=now; }}
+  });
+
+  villagers.forEach(v=>{
+    if(!v.attacked && Math.random()<0.02){ let nx=v.x+(Math.random()-0.5)*2, ny=v.y+(Math.random()-0.5)*2; if(getTile(Math.floor(nx/tileSize),Math.floor(ny/tileSize))!=='🛖'){ v.x=nx; v.y=ny; }}
+    if(v.attacked){ let dx=player.x-v.x, dy=player.y-v.y, d=Math.hypot(dx,dy); if(d<100){ v.x-=dx/d*2; v.y-=dy/d*2; } if(!v.returnTimeout){ v.returnTimeout=setTimeout(()=>{ v.attacked=false; v.returnTimeout=null; },4000+Math.random()*1000); }}
+  });
+
+  if(attack){
+    goblins.forEach(g=>{ 
+      if(g.alive && Math.abs(player.x-g.x)<50){ 
+        g.hp-=player.sword.dmg; 
+        if(g.hp<=0){ g.alive=false; loot.push({...swords[Math.floor(Math.random()*swords.length)], x:g.x, y:g.y}); loot.push({...armors[Math.floor(Math.random()*armors.length)], x:g.x+12, y:g.y}); dropPotion(g.x,g.y); reputation = reputation === 'Neutral' ? 'Good' : reputation;
+        }
+      }
+    });
+    thieves.forEach(t=>{ 
+      if(Math.abs(player.x-t.x)<50){ t.hp-=player.sword.dmg; if(t.hp<=0){ thieves=thieves.filter(th2=>th2!==t); dropPotion(t.x,t.y); reputation = reputation === 'Neutral' ? 'Good' : reputation; } }
+    });
+    villagers.forEach(v=>{ if(Math.abs(player.x-v.x)<30){ v.hp-=player.sword.dmg; v.attacked=true; reputation = 'Bad'; }});
+    attack=false;
+  }
+
+  if(player.hp<=0){ gameOver=true; alert("...you died...\n...your adventure came to an end..."); return; }
+  checkBiome();
+  draw(); requestAnimationFrame(update);
+}
+
+/* ===== DRAW ===== */
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  for(let y=-15;y<15;y++){ 
+    for(let x=-20;x<20;x++){
+      let wx=Math.floor((camX+x*tileSize)/tileSize), wy=Math.floor((camY+y*tileSize)/tileSize);
+      let chunk=getChunk(Math.floor(wx/CHUNK), Math.floor(wy/CHUNK)), t=getTile(wx,wy);
+     ctx.fillStyle = t === 1
+  ? '#8B4513'                         // dirt road
+  : chunk.desert
+    ? '#e0b089'                       // desert (skin/sand color)
+    : chunk.forest
+      ? '#2e6b2e'                     // forest grass
+      : '#4CAF50';                    // plains grass
+      ctx.fillRect(wx*tileSize-camX, wy*tileSize-camY, tileSize, tileSize);
+      if(['🌲','🌳','🛖','🌵'].includes(t)){ ctx.font='40px serif'; ctx.fillText(t, wx*tileSize-camX-8, wy*tileSize-camY+36); }
+      if(animals.includes(t)){ ctx.font='30px serif'; ctx.fillText(t, wx*tileSize-camX+5, wy*tileSize-camY+28); }
+    }
+  }
+
+  castles.forEach(c=>{ ctx.font='80px serif'; ctx.fillText('🏰', c.x-camX, c.y-camY); });
+  fires.forEach(f=>{ ctx.font='28px serif'; ctx.fillText('🔥', f.x-camX, f.y-camY); });
+  loot.forEach(l=>{ ctx.fillStyle=l.color||'gold'; ctx.fillRect(l.x-camX,l.y-camY,20,20); ctx.fillStyle='black'; ctx.font='12px serif'; ctx.fillText(l.name,l.x-camX,l.y-camY-3); });
+  goblins.forEach(g=>{ if(!g.alive) return; ctx.font='30px serif'; ctx.fillText(g.emoji,g.x-camX,g.y-camY+25); ctx.fillStyle='red'; ctx.fillRect(g.x-camX,g.y-8-camY,g.size,5); ctx.fillStyle='lime'; ctx.fillRect(g.x-camX,g.y-8-camY,(g.hp/g.maxHp)*g.size,5); });
+  thieves.forEach(t=>{ ctx.font='30px serif'; ctx.fillText(t.emoji,t.x-camX,t.y-camY+25); ctx.fillStyle='red'; ctx.fillRect(t.x-camX,t.y-8-camY,t.size,5); ctx.fillStyle='lime'; ctx.fillRect(t.x-camX,t.y-8-camY,(t.hp/t.maxHp)*t.size,5); });
+  villagers.forEach(v=>{ ctx.font='28px serif'; ctx.fillText(v.emoji,v.x-camX,v.y-camY+22); });
+// draw player
+  ctx.font='30px serif';
+  if(player.charEmoji){
+    ctx.save();
+    ctx.translate(player.x-camX+15,player.y-camY+25);
+    if(!facingRight) ctx.scale(-1,1);
+    ctx.fillText(player.charEmoji, -15, 0);
+    ctx.restore();
+  } else {
+    ctx.fillStyle='blue';
+    ctx.fillRect(player.x-camX,player.y-camY,player.size,player.size);
+  }
+
+  // player HP bar
+  ctx.fillStyle='red';
+  ctx.fillRect(player.x-camX,player.y-10-camY,player.size,5);
+  ctx.fillStyle='lime';
+  ctx.fillRect(
+    player.x-camX,
+    player.y-10-camY,
+    player.size*Math.min(player.hp/140,1),
+    5
+  );
+
+  stats();
+}
+/* ===== WEATHER & EFFECTS ===== */
+let weather = { type:null, timer:0 };
+function updateWeather(){
+  if(weather.timer<=0){
+    weather.timer = 1000 + Math.random()*2000;
+    let r = Math.random();
+    weather.type = r<0.7?null:(r<0.85?'rain':'fog');
+  } else weather.timer--;
+}
+function drawWeather(){
+  if(weather.type==='rain'){
+    for(let i=0;i<100;i++){
+      ctx.strokeStyle='rgba(173,216,230,0.6)';
+      ctx.beginPath();
+      ctx.moveTo(Math.random()*canvas.width, Math.random()*canvas.height);
+      ctx.lineTo(Math.random()*canvas.width, Math.random()*canvas.height+5);
+      ctx.stroke();
+    }
+  } else if(weather.type==='fog'){
+    ctx.fillStyle='rgba(200,200,200,0.15)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+}
+
+/* ===== NIGHT/DAY CYCLE ===== */
+let time = 0; // 0-2399
+function updateTime(){ time = (time+0.2)%2400; } // slower time
+
+function drawLighting(){
+  let alpha = 0;
+  if(time<600) alpha = 0.5-(time/600*0.5); // morning
+  else if(time<1800) alpha = 0; // day
+  else alpha = (time-1800)/600*0.5; // evening/night
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+/* ===== RANDOM EVENTS ===== */
+function randomEvents(){
+  if(Math.random()<0.0003){
+    let eventType = Math.random()<0.5?'meteor':'treasure';
+    if(eventType==='meteor'){
+      let x = camX + Math.random()*canvas.width;
+      let y = camY - 20;
+      let meteor = {x,y,size:20,fallSpeed:6};
+      let meteorInterval = setInterval(()=>{
+        ctx.fillStyle='orange';
+        ctx.beginPath();
+        ctx.arc(meteor.x-camX,meteor.y-camY,meteor.size,0,Math.PI*2);
+        ctx.fill();
+        meteor.y += meteor.fallSpeed;
+        if(meteor.y>player.y+500){ clearInterval(meteorInterval); }
+      },30);
+    } else {
+      loot.push({name:'Mysterious Chest',x:player.x+Math.random()*200-100,y:player.y+Math.random()*200-100,color:'purple'});
+    }
+  }
+}
+
+/* ===== ANIMAL SPAWN CONTROL ===== */
+let animalSpawnTimer = 0;
+
+function spawnAnimalsControlled(cx, cy) {
+  animalSpawnTimer++;
+  if (animalSpawnTimer >= 6000) { // roughly 100 seconds at 60fps
+    animalSpawnTimer = 0;
+    if (Math.random() < 0.3) { // 30% chance
+      for (let i = 0; i < 2; i++) { // spawn 2 animals
+        const animal = animals[Math.floor(Math.random() * animals.length)];
+        const x = cx * CHUNK * tileSize + Math.random() * CHUNK * tileSize;
+        const y = cy * CHUNK * tileSize + Math.random() * CHUNK * tileSize;
+        if (getTile(Math.floor(x / tileSize), Math.floor(y / tileSize)) === 0) {
+          loot.push({ name: animal, x, y, color: null }); // no box under animals
+        }
+      }
+    }
+  }
+}
+
+/* ===== UPDATE HOOK ===== */
+let oldUpdate = update;
+update = function(){
+  updateWeather();
+  updateTime();
+  randomEvents();
+  spawnAnimalsControlled(Math.floor(player.x / (CHUNK * tileSize)), Math.floor(player.y / (CHUNK * tileSize)));
+  oldUpdate();
+}
+
+/* ===== DRAW HOOK ===== */
+let oldDraw = draw;
+draw = function(){
+  oldDraw();
+  drawWeather();
+  drawLighting();
+  loot.forEach(l=>{
+    if(l.color===null) l.color=null; // hide boxes for animals/loot
+  });
+}
+
+update(); updateInventory();
+</script>
+</body>
+</html>

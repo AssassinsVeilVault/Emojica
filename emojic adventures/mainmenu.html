@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Emojica - Main Menu</title>
+<style>
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(to bottom, #87ceeb, #4CAF50);
+    color: white;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  #menuContainer {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+  }
+  h1 { font-size: 60px; margin: 0; text-shadow: 2px 2px 5px black; }
+  h2 { font-size: 25px; margin: 10px 0 50px 0; text-shadow: 1px 1px 3px black; }
+  button {
+    font-size: 20px;
+    padding: 15px 40px;
+    margin: 10px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    background: linear-gradient(90deg,#FFD700,#FFA500);
+    color: black;
+    font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transition: transform 0.2s;
+  }
+  button:hover { transform: scale(1.1); }
+  .social {
+    margin-top: 50px;
+    font-size: 18px;
+    z-index: 2;
+    position: relative;
+  }
+  .social a { color: #FFD700; text-decoration: none; }
+
+  /* Floating emojis */
+  .emoji {
+    position: absolute;
+    font-size: 30px;
+    opacity: 0.7;
+    user-select: none;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="menuContainer">
+  <h1>Emojica</h1>
+  <h2>An Endless Country</h2>
+
+  <button onclick="startGame()">Start Game</button>
+  <button onclick="openCredits()">Credits 🏆</button>
+
+  <div class="social">
+      </div>
+</div>
+
+<script>
+function startGame(){
+  window.location.href = "loading.html";
+}
+function openCredits(){
+  alert("Developed by Hur muhammad🔥");
+}
+
+// Floating emojis logic
+const emojis = ['🏜️','🌳','🐂','🐐','🐪','🔥','🏹','🛖','⚔️','🛡️','👑'];
+for(let i=0; i<30; i++){
+  const span = document.createElement('div');
+  span.classList.add('emoji');
+  span.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+  span.style.left = Math.random()*window.innerWidth + 'px';
+  span.style.top = Math.random()*window.innerHeight + 'px';
+  span.speedX = (Math.random()-0.5)*1.5;
+  span.speedY = (Math.random()-0.5)*1.5;
+  document.body.appendChild(span);
+}
+
+function animateEmojis(){
+  const floats = document.querySelectorAll('.emoji');
+  floats.forEach(e=>{
+    let x = parseFloat(e.style.left);
+    let y = parseFloat(e.style.top);
+    x += e.speedX;
+    y += e.speedY;
+    if(x<0) x=window.innerWidth;
+    if(x>window.innerWidth) x=0;
+    if(y<0) y=window.innerHeight;
+    if(y>window.innerHeight) y=0;
+    e.style.left = x + 'px';
+    e.style.top = y + 'px';
+  });
+  requestAnimationFrame(animateEmojis);
+}
+animateEmojis();
+</script>
+
+</body>
+</html>
